@@ -37,8 +37,17 @@ jobs:
         run: |
           cmake --install build --prefix install
 
+      - name: Copy MinGW runtime DLLs
+        shell: msys2 {0}
+        run: |
+          mkdir -p install/bin
+          cp /mingw64/bin/libstdc++-6.dll install/bin/ || true
+          cp /mingw64/bin/libgcc_s_seh-1.dll install/bin/ || true
+          cp /mingw64/bin/libwinpthread-1.dll install/bin/ || true
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsdcc-windows-mingw64
           path: install
+
