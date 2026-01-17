@@ -16,17 +16,29 @@
 
 #include <stdio.h>
 #include <signal.h>
-#ifndef _WIN32
-#include <unistd.h>
-#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <math.h>
+#include <string.h>
+#include <algorithm>
 
+/*
+ * Platform headers:
+ * - Linux/Unix: unistd.h provides read/write, STDIN_FILENO, getopt, etc.
+ * - Windows:
+ *   - MSVC: no unistd/getopt; we use io.h + getopt.h (when available) and set binary mode.
+ *   - MinGW/MSYS2: unistd.h exists and is useful (STDIN_FILENO/read/write), and getopt.h provides getopt prototypes.
+ */
 #ifdef _WIN32
-#include <io.h>
-#include <fcntl.h>
+  #include <io.h>
+  #include <fcntl.h>
+  #include <getopt.h>
+  #if defined(__MINGW32__) || defined(__MINGW64__)
+    #include <unistd.h>
+  #endif
+#else
+  #include <unistd.h>
 #endif
 
 #include "dsd_decoder.h"
@@ -57,7 +69,7 @@ private:
 
 void Mixer::mix(unsigned int size1, unsigned int size2, short *channel1, short *channel2)
 {
-    unsigned int m_mixSize = std::max(size1, size2);
+    m_mixSize = std::max(size1, size2);
 
     if (m_mixSize > m_mixSizeMax)
     {
@@ -66,7 +78,7 @@ void Mixer::mix(unsigned int size1, unsigned int size2, short *channel1, short *
             delete[] m_mix;
         }
 
-        m_mix = new short[m_mixSizeMax];
+        m_mix = new short[m_mixSize];
         m_mixSizeMax = m_mixSize;
     }
 
@@ -268,10 +280,12 @@ int main(int argc, char **argv)
             dsdDecoder.showSymbolTiming();
             break;
         case 'v':
+        {
             int verbosity;
             sscanf(optarg, "%d", &verbosity);
             dsdDecoder.setLogVerbosity(verbosity);
             break;
+        }
         case 'L':
             strncpy(log_file, (const char *) optarg, 1023);
             log_file[1022] = '\0';
@@ -281,12 +295,14 @@ int main(int argc, char **argv)
             formattext_file[1022] = '\0';
             break;
         case 'm':
+        {
             float rate;
             sscanf(optarg, "%f", &rate);
             if (rate > 0.1f) {
                 formattext_refresh = rate;
             }
             break;
+        }
         case 'i':
             strncpy(in_file, (const char *) optarg, 1023);
             in_file[1022] = '\0';
@@ -303,6 +319,7 @@ int main(int argc, char **argv)
             break;
 #endif
         case 'g':
+        {
             float gain;
             sscanf(optarg, "%f", &gain);
             dsdDecoder.setAudioGain(gain);
@@ -312,15 +329,19 @@ int main(int argc, char **argv)
             }
 #endif
             break;
+        }
         case 'n':
             dsdDecoder.enableAudioOut(false);
             break;
         case 'R':
+        {
             int resume;
             sscanf(optarg, "%d", &resume);
             dsdDecoder.enableScanResumeAfterTDULCFrames(resume);
             break;
+        }
         case 'd':
+        {
             int dataRateIndex;
             sscanf(optarg, "%d", &dataRateIndex);
             if ((dataRateIndex >= 0) && (dataRateIndex <= 2))
@@ -328,7 +349,9 @@ int main(int argc, char **argv)
                 dsdDecoder.setDataRate((DSDcc::DSDDecoder::DSDRate) dataRateIndex);
             }
             break;
+        }
         case 'T':
+        {
             int tmpSlots;
             sscanf(optarg, "%d", &tmpSlots);
             if ((tmpSlots >= 0) && (tmpSlots <= 3))
@@ -336,6 +359,7 @@ int main(int argc, char **argv)
                 slots = tmpSlots;
             }
             break;
+        }
         case 'f':
             dsdDecoder.setDecodeMode(DSDcc::DSDDecoder::DSDDecodeNone, true);
             if (optarg[0] == 'a') // auto detect
@@ -380,15 +404,19 @@ int main(int argc, char **argv)
             }
             break;
         case 'u':
+        {
             int uvquality;
             sscanf(optarg, "%i", &uvquality);
             dsdDecoder.setUvQuality(uvquality);
             break;
+        }
         case 'U':
+        {
             int upsampling;
             sscanf(optarg, "%d", &upsampling);
             dsdDecoder.setUpsampling(upsampling);
             break;
+        }
         case 'l':
             dsdDecoder.enableCosineFiltering(false);
             break;
@@ -402,10 +430,12 @@ int main(int argc, char **argv)
             dsdDecoder.setSymbolPLLLock(false);
             break;
         case 'k':
+        {
             int key_number;
             sscanf(optarg, "%u", &key_number);
             dsdDecoder.setDMRBasicPrivacyKey(key_number);
             break;
+        }
         default:
             usage();
             exit(0);
@@ -509,7 +539,7 @@ int main(int argc, char **argv)
     {
         short sample;
         int nbAudioSamples1 = 0, nbAudioSamples2 = 0;
-        short *audioSamples1, *audioSamples2;
+        short *audioSamples1 = nullptr, *audioSamples2 = nullptr;
 
         int result = read(in_file_fd, (void *) &sample, sizeof(short));
 
