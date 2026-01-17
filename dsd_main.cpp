@@ -16,11 +16,18 @@
 
 #include <stdio.h>
 #include <signal.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <math.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 
 #include "dsd_decoder.h"
 #include "dsd_upsample.h"
@@ -195,6 +202,24 @@ int main(int argc, char **argv)
     float lon = 0.0f;
 
     fprintf(stderr, "Digital Speech Decoder DSDcc\n");
+
+    // Set safe defaults (the original project assumes /dev/audio)
+#ifdef _WIN32
+    // On Windows, /dev/audio does not exist. Default to stdin and discard output.
+    strncpy(in_file, "-", 1023);
+    in_file[1022] = '\0';
+    strncpy(out_file, "NUL", 1023);
+    out_file[1022] = '\0';
+
+    // Ensure stdin/stdout are in binary mode; otherwise 0x1A (Ctrl-Z) can be treated as EOF.
+    _setmode(_fileno(stdin), _O_BINARY);
+    _setmode(_fileno(stdout), _O_BINARY);
+#else
+    strncpy(in_file, "/dev/audio", 1023);
+    in_file[1022] = '\0';
+    strncpy(out_file, "/dev/audio", 1023);
+    out_file[1022] = '\0';
+#endif
 
     exitflag = 0;
     signal(SIGINT, sigfun);
@@ -402,6 +427,12 @@ int main(int argc, char **argv)
         in_file_fd = open(in_file, O_RDONLY);
     }
 
+#ifdef _WIN32
+    if (in_file_fd >= 0) {
+        _setmode(in_file_fd, _O_BINARY);
+    }
+#endif
+
     if (in_file_fd > -1)
     {
         fprintf(stderr, "Opened %s for input.\n", in_file);
@@ -421,9 +452,15 @@ int main(int argc, char **argv)
         out_file_fd = open(out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
     }
 
+#ifdef _WIN32
+    if (out_file_fd >= 0) {
+        _setmode(out_file_fd, _O_BINARY);
+    }
+#endif
+
     if (out_file_fd > -1)
     {
-        fprintf(stderr, "Opened %s for output.\n", in_file);
+        fprintf(stderr, "Opened %s for output.\n", out_file);
     }
     else
     {
